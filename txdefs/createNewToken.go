@@ -50,32 +50,49 @@ var CreateNewToken = tx.Transaction{
 		},
 	},
 	Routine: func(stub *sw.StubWrapper, req map[string]interface{}) ([]byte, errors.ICCError) {
+		proprietarioKey, ok := req["proprietario"].(assets.Key)
+		if !ok {
+			return nil, errors.WrapError(nil, "Parametro proprietario deve ser um ativo.")
+		}
+
+		proprietarioAsset, err := proprietarioKey.Get(stub)
+		if err != nil {
+			return nil, errors.WrapError(err, "Falha ao obter ativo 'proprietário'.")
+		}
+		proprietarioMap := (map[string]interface{})(*proprietarioAsset)
+
+		updatedProprietarioKey := make(map[string]interface{})
+		updatedProprietarioKey["@assetType"] = "proprietario"
+		updatedProprietarioKey["@key"] = proprietarioMap["@key"]
+
 		id, _ := req["id"].(string)
 		quantidade, _ := req["quantidade"].(float64)
-		burn, _ := req["burn"].(bool)
+		burned, _ := req["burned"].(bool)
+
+		if quantidade <= 0 {
+			return nil, errors.WrapError(nil, "A quantidade deve ser maior que zero.")
+		}
 
 		tokenMap := make(map[string]interface{})
 		tokenMap["@assetType"] = "Token"
-		tokenMap["@assetType"] = "proprietario"
 		tokenMap["id"] = id
+		tokenMap["proprietario"] = updatedProprietarioKey
 		tokenMap["quantidade"] = quantidade
-		tokenMap["burn"] = burn
+		tokenMap["burned"] = burned
 
 		tokenAsset, err := assets.NewAsset(tokenMap)
 		if err != nil {
-			return nil, errors.WrapError(err, "Failed to create a new asset")
+			return nil, errors.WrapError(err, "Falha ao criar ativo 'token'.")
 		}
 
-		// Save the new token on channel
 		_, err = tokenAsset.PutNew(stub)
 		if err != nil {
-			return nil, errors.WrapError(err, "Error saving asset on blockchain")
+			return nil, errors.WrapError(err, "Erro ao salvar ativo na blockchain.")
 		}
 
-		// Marshal asset back to JSON format
 		tokenJSON, nerr := json.Marshal(tokenAsset)
 		if nerr != nil {
-			return nil, errors.WrapError(nil, "failed to encode asset to JSON format")
+			return nil, errors.WrapError(nil, "Falha ao converter ativo para JSON.")
 		}
 
 		return tokenJSON, nil
